@@ -977,13 +977,13 @@ def export_full_report(df):
         <meta charset="UTF-8">
         <title>Reporte Toxicología</title>
         <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            h1, h2, h3 { color: #2c3e50; }
-            table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
-            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-            th { background-color: #f2f2f2; }
-            .figure { margin: 20px 0; text-align: center; }
-            img { max-width: 100%; height: auto; }
+            body {{ font-family: Arial, sans-serif; margin: 20px; }}
+            h1, h2, h3 {{ color: #2c3e50; }}
+            table {{ border-collapse: collapse; width: 100%; margin-bottom: 20px; }}
+            th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+            th {{ background-color: #f2f2f2; }}
+            .figure {{ margin: 20px 0; text-align: center; }}
+            img {{ max-width: 100%; height: auto; }}
         </style>
     </head>
     <body>
