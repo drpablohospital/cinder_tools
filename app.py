@@ -546,7 +546,9 @@ def build_analysis_df(df: pd.DataFrame) -> pd.DataFrame:
         )
 
     cluster_vars = [v for v in ["años_cumplidos", "news2_score", "fc", "sao2", "num_farmacos"] if v in df.columns]
-    df["cluster"] = np.nan
+
+    # IMPORTANTE: crear como texto, no float
+    df["cluster"] = pd.Series([None] * len(df), index=df.index, dtype="object")
 
     if len(cluster_vars) >= 3:
         df_cluster = df[cluster_vars].dropna().copy()
@@ -568,7 +570,10 @@ def build_analysis_df(df: pd.DataFrame) -> pd.DataFrame:
                 idx_leve: "Cluster 1: Menor carga fisiológica",
                 idx_grave: "Cluster 2: Mayor gravedad fisiológica",
             }
-            df.loc[df_cluster.index, "cluster"] = [cluster_map.get(c, f"Cluster {c}") for c in clusters]
+
+            df.loc[df_cluster.index, "cluster"] = [
+                cluster_map.get(c, f"Cluster {c}") for c in clusters
+            ]
 
     return df
 
