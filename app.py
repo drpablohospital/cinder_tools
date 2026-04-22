@@ -611,11 +611,25 @@ def find_gravity_rule(df: pd.DataFrame, target='news2_alto'):
         return
 
     # Codificar categóricas
+    from pandas.api.types import (
+        is_object_dtype,
+        is_string_dtype,
+        is_categorical_dtype,
+        is_bool_dtype,
+        is_numeric_dtype,
+    )
+    
     for var in cat_vars:
-        if data[var].dtype == 'object':
-            data[var] = data[var].astype('category').cat.codes
+        s = data[var]
+    
+        if is_object_dtype(s) or is_string_dtype(s) or is_categorical_dtype(s):
+            data[var] = s.astype("category").cat.codes
+        elif is_bool_dtype(s):
+            data[var] = s.astype(int)
+        elif is_numeric_dtype(s):
+            data[var] = pd.to_numeric(s, errors="coerce").fillna(0).astype(int)
         else:
-            data[var] = data[var].astype(int)
+            data[var] = s.astype("string").astype("category").cat.codes
 
     X = data[numeric_vars + cat_vars]
     y = data[target]
@@ -889,26 +903,94 @@ def render_clusters(df: pd.DataFrame):
     st.dataframe(counts, use_container_width=True)
 
     cluster_vars = [v for v in ["años_cumplidos", "news2_score", "fc", "sao2", "num_farmacos"] if v in df.columns]
-    dfx = df[cluster_vars + ["cluster"]].dropna()
+    
+    # asegurar que las variables numéricas sí sean numéricas
+    for col in cluster_vars:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    
+    # asegurar que cluster sea texto
+    if "cluster" in df.columns:
+        df["cluster"] = df["cluster"].astype("string")
+    else:
+        df["cluster"] = pd.Series([""] * len(df), index=df.index, dtype="string")
+    
+    # tomar solo filas útiles: con datos numéricos y con cluster asignado
+    dfx = df[cluster_vars + ["cluster"]].copy()
+    dfx = dfx.dropna(subset=cluster_vars)
+    dfx = dfx[dfx["cluster"].notna() & (dfx["cluster"] != "")]
+    
     if len(dfx) >= 5 and len(cluster_vars) >= 2:
-        # PCA para visualización
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(dfx[cluster_vars])
+    
         pca = PCA(n_components=2)
         coords = pca.fit_transform(X_scaled)
-        plot_df = pd.DataFrame({"PC1": coords[:, 0], "PC2": coords[:, 1], "cluster": dfx["cluster"].values})
-        fig = px.scatter(plot_df, x="PC1", y="PC2", color="cluster", title="Proyección PCA de clusters")
-        st.plotly_chart(fig, use_container_width=True)
+    
+        plot_df = pd.DataFrame({
+            "PC1": coords[:, 0],
+            "PC2": coords[:, 1],
+            "cluster": dfx["cluster"].astype(str).values
+        })
+    
+        fig = px.scatter(
+            plot_df,
+            x="PC1",
+            y="PC2",
+            color="cluster",
+            title="Proyección PCA de clusters"
+        )
+        st.plotly_chart(fig, width="stretch")
+    
         with st.container():
             if st.button("📸 Descargar PNG", key="png_cluster"):
                 img_bytes = fig.to_image(format="png")
                 b64 = base64.b64encode(img_bytes).decode()
                 href = f'<a href="data:image/png;base64,{b64}" download="cluster_pca.png">Descargar</a>'
                 st.markdown(href, unsafe_allow_html=True)
-
-        # Perfiles medios
+    
         profile = dfx.groupby("cluster")[cluster_vars].mean().round(2)
-        st.dataframe(profile, use_container_width=True)
+        st.dataframe(profile, width="stretch")
+    
+        # Gráfico de radar
+        st.markdown("**Perfil de los clusters (variables normalizadas)**")
+        scaler_radar = StandardScaler()
+        profile_scaled = pd.DataFrame(
+            scaler_radar.fit_transform(profile),
+            index=profile.index,
+            columns=profile.columns
+        )
+    
+        categories = profile_scaled.columns.tolist()
+        fig_radar = go.Figure()
+    
+        for cluster in profile_scaled.index:
+            values = profile_scaled.loc[cluster].values.tolist()
+            values += values[:1]
+            categories_radar = categories + [categories[0]]
+            fig_radar.add_trace(go.Scatterpolar(
+                r=values,
+                theta=categories_radar,
+                fill='toself',
+                name=cluster
+            ))
+    
+        fig_radar.update_layout(
+            polar=dict(radialaxis=dict(visible=True, range=[-2, 2])),
+            showlegend=True,
+            title="Perfil de clusters (valores Z)"
+        )
+        st.plotly_chart(fig_radar, use_container_width=True)
+    
+        with st.expander("Ver pacientes por cluster"):
+            for cluster_name in df["cluster"].dropna().unique():
+                if str(cluster_name).strip() == "":
+                    continue
+                pacientes = df[df["cluster"] == cluster_name][["id", "identificador", "no_entrada"]].copy()
+                st.write(f"**{cluster_name}** ({len(pacientes)} pacientes)")
+                st.dataframe(pacientes, use_container_width=True)
+    
+    else:
+        st.info("No hay suficientes datos con cluster asignado para mostrar PCA y perfiles.")
 
         # Gráfico de radar (spider)
         st.markdown("**Perfil de los clusters (variables normalizadas)**")
