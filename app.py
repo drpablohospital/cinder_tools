@@ -1027,23 +1027,73 @@ def render_clusters(df: pd.DataFrame):
 
 def render_wordcloud(df: pd.DataFrame):
     st.subheader("Exploración semántica")
+
     text_cols = [c for c in ["motivo_atencion", "impresion_diagnostica", "tipo_toxico_principal", "observaciones"] if c in df.columns]
     if not text_cols:
         st.info("No hay columnas de texto para explorar.")
         return
 
     corpus = " ".join(
-        df[text_cols].fillna("").astype(str).apply(lambda row: " ".join(row), axis=1).tolist()
+        df[text_cols]
+        .fillna("")
+        .astype(str)
+        .apply(lambda row: " ".join(row), axis=1)
+        .tolist()
     ).strip()
 
     if not corpus:
         st.info("No hay texto suficiente para nube de palabras.")
         return
 
-    wc = WordCloud(width=1200, height=500, background_color="white").generate(corpus)
-    fig, ax = plt.subplots(figsize=(12, 5))
+    from wordcloud import WordCloud, STOPWORDS
+    import random
+
+    # --- STOPWORDS ---
+    custom_stopwords = set(STOPWORDS).union({
+        "DE", "LA", "EL", "LOS", "LAS", "UN", "UNA", "EN", "CON", "POR",
+        "PARA", "DEL", "AL", "SE", "QUE", "LO", "SU", "A", "Y",
+        "PACIENTE", "ACUDE", "REFIERE", "PRESENTA",
+        "DICE", "COMENTA", "ANTECEDENTE", "HACE",
+        "DIA", "HOY", "AYER", "HORAS",
+        "POSTERIOR", "MOMENTO", "ACTUAL", "CUAL", "ESTE", "ESTA",
+        "VALORACION", "CONSULTA", "URGENCIA", "URGENCIAS",
+        "SIN", "DATOS", "APROXIMADAMENTE"
+    })
+
+    # --- PALETA ESTILO TERMINAL / EDITORIAL ---
+    palette = [
+        "#00FFC6",  # neon cyan
+        "#00B3FF",  # electric blue
+        "#FF4D6D",  # coral red
+        "#F7FF00",  # acid yellow
+        "#B388FF",  # soft violet
+        "#FFFFFF"   # white highlight
+    ]
+
+    def color_func(word, font_size, position, orientation, random_state=None, **kwargs):
+        return random.choice(palette)
+
+    wc = WordCloud(
+        width=1400,
+        height=600,
+        background_color="#0B0F14",  # negro azulado tipo terminal
+        stopwords=custom_stopwords,
+        collocations=False,
+        color_func=color_func,
+        prefer_horizontal=0.9,
+        relative_scaling=0.5,
+        max_words=120
+    ).generate(corpus)
+
+    # --- RENDER MÁS LIMPIO ---
+    fig, ax = plt.subplots(figsize=(14, 6), facecolor="#0B0F14")
     ax.imshow(wc, interpolation="bilinear")
     ax.axis("off")
+
+    # borde sutil tipo UI moderna
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+
     st.pyplot(fig)
 
 
