@@ -22,9 +22,12 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 
+import sheets_client  # Google Sheets persistence layer
+
 warnings.filterwarnings("ignore")
 
 DB_PATH = "toxicologia.db"
+USE_SHEETS = True  # Toggle to False to revert to local SQLite
 
 
 # ------------------ Autenticación ------------------ #
@@ -270,6 +273,10 @@ def get_required_defaults():
 
 
 def init_db():
+    if USE_SHEETS:
+        # Ensure the worksheet exists with proper headers
+        sheets_client.get_worksheet("pacientes")
+        return
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute(
@@ -336,6 +343,8 @@ def init_db():
 
 
 def insert_paciente(data):
+    if USE_SHEETS:
+        return sheets_client.insert_paciente(data)
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     columns = ", ".join(data.keys())
@@ -343,10 +352,15 @@ def insert_paciente(data):
     sql = f"INSERT INTO pacientes ({columns}) VALUES ({placeholders})"
     cursor.execute(sql, data)
     conn.commit()
+    last_id = cursor.lastrowid
     conn.close()
+    return last_id
 
 
 def update_paciente(id_value, data):
+    if USE_SHEETS:
+        sheets_client.update_paciente(id_value, data)
+        return
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     set_clause = ", ".join([f"{k}=:{k}" for k in data.keys()])
@@ -358,6 +372,9 @@ def update_paciente(id_value, data):
 
 
 def delete_paciente(id_value):
+    if USE_SHEETS:
+        sheets_client.delete_paciente(id_value)
+        return
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("DELETE FROM pacientes WHERE id=?", (id_value,))
@@ -366,6 +383,9 @@ def delete_paciente(id_value):
 
 
 def clear_db():
+    if USE_SHEETS:
+        sheets_client.clear_db()
+        return
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("DELETE FROM pacientes")
@@ -374,6 +394,8 @@ def clear_db():
 
 
 def load_all():
+    if USE_SHEETS:
+        return sheets_client.load_all()
     conn = sqlite3.connect(DB_PATH)
     df = pd.read_sql_query("SELECT * FROM pacientes ORDER BY no_entrada, id", conn)
     conn.close()
