@@ -53,7 +53,12 @@ COLUMN_ORDER = [
 # Auth
 # ---------------------------------------------------------------------------
 def _load_credentials() -> Credentials:
-    """Load service-account credentials from Streamlit secrets, env or local file."""
+    """Load service-account credentials from Streamlit secrets ONLY.
+    
+    IMPORTANTE: Configura las credenciales en Streamlit Cloud:
+    Settings -> Secrets -> Agregar [google_service_account] con tus credenciales.
+    NO uses variables de entorno CINDER_GCP_CREDENTIALS.
+    """
     # 1) Streamlit secrets (recomendado para Streamlit Cloud)
     try:
         if "google_service_account" in st.secrets:
@@ -62,27 +67,18 @@ def _load_credentials() -> Credentials:
             if "private_key" in creds_dict:
                 creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
             return Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
-    except Exception:
-        pass
+    except Exception as e:
+        st.error(f"Error al cargar credenciales de Streamlit secrets: {e}")
+        raise
 
-    # 2) Variable de entorno con JSON completo
-    secrets_json = os.environ.get("CINDER_GCP_CREDENTIALS")
-    if secrets_json:
-        info = json.loads(secrets_json)
-        return Credentials.from_service_account_info(info, scopes=SCOPES)
-
-    # 3) Local dev fallback: archivo JSON
-    creds_path = os.environ.get("CINDER_GCP_CREDENTIALS_PATH", "")
-    if creds_path and os.path.exists(creds_path):
-        return Credentials.from_service_account_file(creds_path, scopes=SCOPES)
-
-    # 4) Buscar service_account.json en raíz
+    # 2) Local dev fallback: archivo JSON (solo para desarrollo local)
     if os.path.exists("service_account.json"):
         return Credentials.from_service_account_file("service_account.json", scopes=SCOPES)
 
     raise RuntimeError(
-        "No se encontraron credenciales de GCP. Configura en Streamlit secrets "
-        "[google_service_account] o variables de entorno CINDER_GCP_CREDENTIALS / CINDER_GCP_CREDENTIALS_PATH."
+        "No se encontraron credenciales de GCP. "
+        "Configura [google_service_account] en Streamlit secrets. "
+        "NO uses la variable de entorno CINDER_GCP_CREDENTIALS (está deprecada)."
     )
 
 
