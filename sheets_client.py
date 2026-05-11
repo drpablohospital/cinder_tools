@@ -5,6 +5,7 @@ from typing import Any
 
 import gspread
 import pandas as pd
+import streamlit as st
 from google.auth.transport.requests import Request
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
@@ -12,11 +13,25 @@ from googleapiclient.discovery import build
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-SPREADSHEET_ID = os.environ.get("CINDER_SHEET_ID", "")
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
 ]
+
+def get_spreadsheet_id():
+    """Obtiene el ID de la hoja desde Streamlit secrets o variables de entorno."""
+    # 1) Streamlit secrets (recomendado para Streamlit Cloud)
+    try:
+        if "google_sheets" in st.secrets and "spreadsheet_id" in st.secrets["google_sheets"]:
+            return st.secrets["google_sheets"]["spreadsheet_id"]
+    except Exception:
+        pass
+    
+    # 2) Variable de entorno
+    return os.environ.get("CINDER_SHEET_ID", "")
+
+
+SPREADSHEET_ID = get_spreadsheet_id()
 
 COLUMN_ORDER = [
     "id", "no_entrada", "identificador", "fecha_atencion", "hora_atencion",
@@ -38,22 +53,36 @@ COLUMN_ORDER = [
 # Auth
 # ---------------------------------------------------------------------------
 def _load_credentials() -> Credentials:
-    """Load service-account credentials from env or local file."""
-    # 1) Streamlit secrets (recommended for Streamlit Cloud)
+    """Load service-account credentials from Streamlit secrets, env or local file."""
+    # 1) Streamlit secrets (recomendado para Streamlit Cloud)
+    try:
+        if "google_service_account" in st.secrets:
+            creds_dict = dict(st.secrets["google_service_account"])
+            # Reemplazar \n por saltos reales en la clave privada
+            if "private_key" in creds_dict:
+                creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+            return Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+    except Exception:
+        pass
+
+    # 2) Variable de entorno con JSON completo
     secrets_json = os.environ.get("CINDER_GCP_CREDENTIALS")
     if secrets_json:
         info = json.loads(secrets_json)
         return Credentials.from_service_account_info(info, scopes=SCOPES)
 
-    # 2) Local dev fallback: .streamlit/secrets.toml is handled by streamlit,
-    #    but if running outside streamlit we can read a JSON file path from env
+    # 3) Local dev fallback: archivo JSON
     creds_path = os.environ.get("CINDER_GCP_CREDENTIALS_PATH", "")
     if creds_path and os.path.exists(creds_path):
         return Credentials.from_service_account_file(creds_path, scopes=SCOPES)
 
+    # 4) Buscar service_account.json en raíz
+    if os.path.exists("service_account.json"):
+        return Credentials.from_service_account_file("service_account.json", scopes=SCOPES)
+
     raise RuntimeError(
-        "No GCP credentials found. Set CINDER_GCP_CREDENTIALS env var "
-        "(JSON content) or CINDER_GCP_CREDENTIALS_PATH (file path)."
+        "No se encontraron credenciales de GCP. Configura en Streamlit secrets "
+        "[google_service_account] o variables de entorno CINDER_GCP_CREDENTIALS / CINDER_GCP_CREDENTIALS_PATH."
     )
 
 
